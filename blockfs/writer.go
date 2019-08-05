@@ -1,10 +1,13 @@
 package blockfs
 
-import "io"
+type writer struct {
+	root string
+}
 
-// Write returns an io.WriteCloser that writes a file into the FS
-// located at root, automatically deduplicating data into the
-// appropriate blocks.
-func Write(root string) (io.WriteCloser, error) {
+func (w *writer) Write(buf []byte) (n int, err error) {
+	panic("Not implemented.")
+}
+
+func (w *writer) Close() error {
 	panic("Not implemented.")
 }

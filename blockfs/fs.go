@@ -118,3 +118,13 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 		blocks: blocks,
 	}, nil
 }
+
+// Write returns an io.WriteCloser that writes a file into the FS,
+// automatically deduplicating data into the appropriate blocks. It
+// must be closed when all data has been written to it to make sure
+// that partial blocks can be written properly.
+func (fs *FS) Write() (io.WriteCloser, error) {
+	return &writer{
+		root: root,
+	}
+}
