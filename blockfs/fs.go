@@ -30,14 +30,19 @@ import (
 var prefixRE = regexp.MustCompile(`^[0-9a-f]{2}$`)
 
 var (
+	// ErrNoSuchBlock is returned when a block is expected to exist and
+	// doesn't.
 	ErrNoSuchBlock = errors.New("block does not exist in filesystem")
 )
 
+// FS provides an interface for dealing with a BlockFS system. It is
+// not safe for concurrent use.
 type FS struct {
 	root     string
 	prefixes map[string]struct{}
 }
 
+// Open opens the filesystem rooted at the specified path.
 func Open(root string) (*FS, error) {
 	dir, err := os.Open(root)
 	if err != nil {
@@ -102,6 +107,8 @@ func (fs *FS) Exists(block string) bool {
 // order. It only keeps a single block file open at a time. Closing
 // the returned io.ReadCloser closes the currently open file and
 // causes further reads to return errors.
+//
+// The returned io.ReadCloser is not safe for concurrent access.
 func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 	for _, block := range blocks {
 		if !fs.Exists(block) {
@@ -123,8 +130,11 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 // automatically deduplicating data into the appropriate blocks. It
 // must be closed when all data has been written to it to make sure
 // that partial blocks can be written properly.
-func (fs *FS) Write() (io.WriteCloser, error) {
+//
+// The returned io.WriteCloser is not safe for concurrent access.
+func (fs *FS) Write(bsize int) io.WriteCloser {
 	return &writer{
-		root: root,
+		root:  fs.root,
+		bsize: bsize,
 	}
 }
