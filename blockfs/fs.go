@@ -134,7 +134,7 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 // The returned io.WriteCloser is not safe for concurrent access.
 func (fs *FS) Write(bsize int) io.WriteCloser {
 	return &writer{
-		root:  fs.root,
+		fs:    fs,
 		bsize: bsize,
 	}
 }

@@ -1,16 +1,45 @@
 package blockfs
 
-import "bytes"
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+)
 
 type writer struct {
-	root  string
+	fs    *FS
 	bsize int
 
 	buf bytes.Buffer
 }
 
 func (w *writer) flush(data []byte) error {
-	panic("Not implemented.")
+	sum := sha256.Sum256(data)
+	id := hex.EncodeToString(sum[:])
+
+	if w.fs.Exists(id) {
+		return nil
+	}
+
+	err := os.MkdirAll(filepath.Join(w.fs.root, id[:2]), 0700)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(
+		filepath.Join(w.fs.root, id[:2], id),
+		os.O_WRONLY|os.O_CREATE,
+		0600,
+	)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(data)
+	return err
 }
 
 func (w *writer) shift(buf []byte) {
