@@ -43,7 +43,7 @@ func (w *writer) flush(data []byte) error {
 }
 
 func (w *writer) shift(buf []byte) {
-	_, _ = w.buf.Read(buf)
+	w.buf.Read(buf)
 
 	rem := w.buf.Bytes()
 	w.buf.Reset()
@@ -52,13 +52,16 @@ func (w *writer) shift(buf []byte) {
 
 func (w *writer) Write(data []byte) (n int, err error) {
 	w.buf.Write(data)
-	if w.buf.Len() < w.bsize {
-		return len(data), nil
+	for w.buf.Len() >= w.bsize {
+		buf := make([]byte, w.bsize)
+		w.shift(buf)
+		err := w.flush(buf)
+		if err != nil {
+			return len(data), err
+		}
 	}
 
-	buf := make([]byte, w.bsize)
-	w.shift(buf)
-	return len(data), w.flush(buf)
+	return len(data), nil
 }
 
 func (w *writer) Close() error {
