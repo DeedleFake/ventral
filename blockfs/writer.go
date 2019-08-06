@@ -1,8 +1,7 @@
 package blockfs
 
 import (
-	"bytes"
-	"crypto/sha256"
+	"crypto/sha1"
 	"encoding/hex"
 	"io"
 	"os"
@@ -22,14 +21,13 @@ type Writer interface {
 type writer struct {
 	fs *FS
 
-	bsize int
-	buf   bytes.Buffer
-
-	blocks []string
+	chunker Chunker
+	blocks  []string
+	err     error
 }
 
 func (w *writer) flush(data []byte) (err error) {
-	sum := sha256.Sum256(data)
+	sum := sha1.Sum(data)
 	id := hex.EncodeToString(sum[:])
 
 	defer func() {
@@ -67,21 +65,22 @@ func (w *writer) flush(data []byte) (err error) {
 	return err
 }
 
-func (w *writer) shift(buf []byte) {
-	w.buf.Read(buf)
-
-	rem := w.buf.Bytes()
-	w.buf.Reset()
-	w.buf.Write(rem)
-}
-
 func (w *writer) Write(data []byte) (n int, err error) {
-	w.buf.Write(data)
-	for w.buf.Len() >= w.bsize {
-		buf := make([]byte, w.bsize)
-		w.shift(buf)
-		err := w.flush(buf)
+	if w.err != nil {
+		return 0, w.err
+	}
+
+	w.chunker.Write(data)
+
+	for {
+		chunk := w.chunker.Next(false)
+		if len(chunk) == 0 {
+			break
+		}
+
+		err := w.flush(chunk)
 		if err != nil {
+			w.err = err
 			return len(data), err
 		}
 	}
@@ -90,7 +89,11 @@ func (w *writer) Write(data []byte) (n int, err error) {
 }
 
 func (w *writer) Close() error {
-	return w.flush(w.buf.Bytes())
+	if w.err != nil {
+		return w.err
+	}
+
+	return w.flush(w.chunker.Next(true))
 }
 
 func (w *writer) Blocks() []string {

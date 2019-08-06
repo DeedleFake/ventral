@@ -132,14 +132,15 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 }
 
 // Write returns an Writer that writes a file into the FS,
-// automatically deduplicating data into the appropriate blocks. It
-// must be closed when all data has been written to it to make sure
-// that partial blocks can be written properly.
+// automatically deduplicating data into the appropriate blocks using
+// the specified Chunker. It must be closed when all data has been
+// written to it to make sure that partial blocks can be written
+// properly.
 //
 // The returned Writer is not safe for concurrent access.
-func (fs *FS) Write(bsize int) Writer {
+func (fs *FS) Write(chunker Chunker) Writer {
 	return &writer{
-		fs:    fs,
-		bsize: bsize,
+		fs:      fs,
+		chunker: chunker,
 	}
 }
