@@ -44,6 +44,11 @@ type FS struct {
 
 // Open opens the filesystem rooted at the specified path.
 func Open(root string) (*FS, error) {
+	err := os.MkdirAll(root, 0700)
+	if err != nil {
+		return nil, err
+	}
+
 	dir, err := os.Open(root)
 	if err != nil {
 		return nil, err
@@ -126,13 +131,13 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 	}, nil
 }
 
-// Write returns an io.WriteCloser that writes a file into the FS,
+// Write returns an Writer that writes a file into the FS,
 // automatically deduplicating data into the appropriate blocks. It
 // must be closed when all data has been written to it to make sure
 // that partial blocks can be written properly.
 //
-// The returned io.WriteCloser is not safe for concurrent access.
-func (fs *FS) Write(bsize int) io.WriteCloser {
+// The returned Writer is not safe for concurrent access.
+func (fs *FS) Write(bsize int) Writer {
 	return &writer{
 		fs:    fs,
 		bsize: bsize,
