@@ -66,34 +66,49 @@ func TestChunker(t *testing.T) {
 	io.WriteString(c, testFile)
 
 	lines := [][]byte{
-		[]byte("This is a test.\nThis is also a te"),
-		[]byte("st, oddly enough.\nThi"),
+		[]byte("This is a test.\nThis "),
+		[]byte("is also a test, oddly enough.\nThis is a tes"),
 	}
 
-	for _, line := range lines {
+	for i := 0; i < 10; i++ {
 		chunk := c.Next(false)
 		if len(chunk) == 0 {
+			if i < len(lines) {
+				t.Errorf("Not enough chunks: %v", i)
+			}
 			break
 		}
 
-		if !bytes.Equal(chunk, line) {
-			t.Errorf("Expected %q\nGot %q", line, chunk)
+		if i >= len(lines) {
+			t.Errorf("Extra chunk: %q", chunk)
+			continue
+		}
+
+		if !bytes.Equal(chunk, lines[i]) {
+			t.Errorf("Expected %q\nGot %q", lines[i], chunk)
 		}
 	}
 
 	lines = [][]byte{
-		[]byte("s is a test, too.\n"),
-		[]byte(""),
+		[]byte("t, too.\n"),
 	}
 
-	for _, line := range lines {
+	for i := 0; i < 10; i++ {
 		chunk := c.Next(true)
 		if len(chunk) == 0 {
+			if i < len(lines) {
+				t.Errorf("Not enough chunks: %v", i)
+			}
 			break
 		}
 
-		if !bytes.Equal(chunk, line) {
-			t.Errorf("Expected %q\nGot %q", line, chunk)
+		if i >= len(lines) {
+			t.Errorf("Extra chunk: %q", chunk)
+			continue
+		}
+
+		if !bytes.Equal(chunk, lines[i]) {
+			t.Errorf("Expected %q\nGot %q", lines[i], chunk)
 		}
 	}
 }
