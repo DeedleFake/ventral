@@ -2,6 +2,7 @@ package blockfs_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -31,6 +32,9 @@ func TestFS(t *testing.T) {
 
 			blocks = w.Blocks()
 		}()
+		w.Wrap = func(w io.Writer) io.Writer {
+			return gzip.NewWriter(w)
+		}
 
 		_, err := io.WriteString(w, testFile)
 		if err != nil {
@@ -49,6 +53,9 @@ func TestFS(t *testing.T) {
 				t.Fatal(err)
 			}
 		}()
+		r.Wrap = func(r io.Reader) (io.Reader, error) {
+			return gzip.NewReader(r)
+		}
 
 		data, err := ioutil.ReadAll(r)
 		if err != nil {

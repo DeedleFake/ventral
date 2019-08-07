@@ -112,9 +112,7 @@ func (fs *FS) Exists(block string) bool {
 // order. It only keeps a single block file open at a time. Closing
 // the returned io.ReadCloser closes the currently open file and
 // causes further reads to return errors.
-//
-// The returned io.ReadCloser is not safe for concurrent access.
-func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
+func (fs *FS) Read(blocks []string) (*Reader, error) {
 	for _, block := range blocks {
 		if !fs.Exists(block) {
 			return nil, ErrNoSuchBlock
@@ -125,7 +123,7 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 		blocks = []string{}
 	}
 
-	return &reader{
+	return &Reader{
 		root:   fs.root,
 		blocks: blocks,
 	}, nil
@@ -136,10 +134,8 @@ func (fs *FS) Read(blocks []string) (io.ReadCloser, error) {
 // the specified Chunker. It must be closed when all data has been
 // written to it to make sure that partial blocks can be written
 // properly.
-//
-// The returned Writer is not safe for concurrent access.
-func (fs *FS) Write(chunker Chunker) Writer {
-	return &writer{
+func (fs *FS) Write(chunker Chunker) *Writer {
+	return &Writer{
 		fs:      fs,
 		chunker: chunker,
 	}

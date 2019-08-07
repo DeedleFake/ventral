@@ -9,16 +9,19 @@ import (
 )
 
 // Writer writes to an FS, automatically deduplicating blocks.
-type Writer interface {
-	io.WriteCloser
+type Writer struct {
+	// Wrap inserts an io.Writer into the pipeline in between the
+	// chunker and the OS's filesystem. This can be used for, for
+	// example, compressing blocks when they are written to the
+	// filesystem. Block IDs are calculated before the data in them is
+	// written, so if the wrapping io.Writer changes the data at all
+	// then the hash of the written block data may not match the block's
+	// ID.
+	//
+	// If the returned writer implements io.Closer, it will be closed
+	// before the underlying file is closed.
+	Wrap func(io.Writer) io.Writer
 
-	// Blocks returns a list of the hashes of blocks that have been
-	// written by this Writer. Its return is only particularly useful
-	// after the Writer has been written to and closed with no errors.
-	Blocks() []string
-}
-
-type writer struct {
 	fs *FS
 
 	chunker Chunker
@@ -26,7 +29,7 @@ type writer struct {
 	err     error
 }
 
-func (w *writer) flush(data []byte) (err error) {
+func (w *Writer) flush(data []byte) (err error) {
 	sum := sha1.Sum(data)
 	id := hex.EncodeToString(sum[:])
 
@@ -61,11 +64,24 @@ func (w *writer) flush(data []byte) (err error) {
 		}
 	}()
 
-	_, err = file.Write(data)
+	wrap := io.Writer(file)
+	if w.Wrap != nil {
+		wrap = w.Wrap(wrap)
+		if c, ok := wrap.(io.Closer); ok {
+			defer func() {
+				e := c.Close()
+				if (e != nil) && (err == nil) {
+					err = e
+				}
+			}()
+		}
+	}
+
+	_, err = wrap.Write(data)
 	return err
 }
 
-func (w *writer) Write(data []byte) (n int, err error) {
+func (w *Writer) Write(data []byte) (n int, err error) {
 	if w.err != nil {
 		return 0, w.err
 	}
@@ -88,7 +104,7 @@ func (w *writer) Write(data []byte) (n int, err error) {
 	return len(data), nil
 }
 
-func (w *writer) Close() error {
+func (w *Writer) Close() error {
 	if w.err != nil {
 		return w.err
 	}
@@ -96,6 +112,9 @@ func (w *writer) Close() error {
 	return w.flush(w.chunker.Next(true))
 }
 
-func (w *writer) Blocks() []string {
+// Blocks returns a list of the hashes of blocks that have been
+// written by this Writer. Its return is only particularly useful
+// after the Writer has been written to and closed with no errors.
+func (w *Writer) Blocks() []string {
 	return w.blocks
 }

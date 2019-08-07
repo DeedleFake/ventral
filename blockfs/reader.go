@@ -6,14 +6,20 @@ import (
 	"path/filepath"
 )
 
-type reader struct {
-	root   string
-	blocks []string
-	cur    *os.File
+type Reader struct {
+	// Wrap inserts an io.Reader into the pipeline in between the OS's
+	// filesystem and the client. This is useful for, for example,
+	// decompressing blocks that were compressed.
+	Wrap func(io.Reader) (io.Reader, error)
+
+	root    string
+	blocks  []string
+	curFile *os.File
+	cur     io.Reader
 }
 
 // TODO: Verify the blocks that are being read.
-func (r *reader) Read(buf []byte) (n int, err error) {
+func (r *Reader) Read(buf []byte) (n int, err error) {
 	if r.blocks == nil {
 		return 0, os.ErrClosed
 	}
@@ -22,22 +28,32 @@ func (r *reader) Read(buf []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	if r.cur == nil {
+	if r.curFile == nil {
 		cur, err := os.Open(filepath.Join(r.root, r.blocks[0][:2], r.blocks[0]))
 		if err != nil {
 			return 0, err
 		}
 
-		r.cur = cur
+		r.curFile = cur
+		r.cur = r.curFile
+		if r.Wrap != nil {
+			r.cur, err = r.Wrap(r.cur)
+			if err != nil {
+				r.curFile = nil
+				r.cur = nil
+				return 0, err
+			}
+		}
 		r.blocks = r.blocks[1:]
 	}
 
 	n, err = r.cur.Read(buf)
 	if err == io.EOF {
-		err := r.cur.Close()
+		err := r.curFile.Close()
 		if err != nil {
 			return n, err
 		}
+		r.curFile = nil
 		r.cur = nil
 
 		if n == len(buf) {
@@ -52,12 +68,13 @@ func (r *reader) Read(buf []byte) (n int, err error) {
 	return n, err
 }
 
-func (r *reader) Close() error {
-	if r.cur != nil {
-		err := r.cur.Close()
+func (r *Reader) Close() error {
+	if r.curFile != nil {
+		err := r.curFile.Close()
 		if err != nil {
 			return err
 		}
+		r.curFile = nil
 		r.cur = nil
 	}
 
