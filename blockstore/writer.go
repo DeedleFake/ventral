@@ -1,4 +1,4 @@
-package blockfs
+package blockstore
 
 import (
 	"crypto/sha1"
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// Writer writes to an FS, automatically deduplicating blocks.
+// Writer writes to a store, automatically deduplicating blocks.
 type Writer struct {
 	// Wrap inserts an io.Writer into the pipeline in between the
 	// chunker and the OS's filesystem. This can be used for, for
@@ -22,7 +22,7 @@ type Writer struct {
 	// before the underlying file is closed.
 	Wrap func(io.Writer) io.Writer
 
-	fs *FS
+	s *Store
 
 	chunker Chunker
 	blocks  []string
@@ -36,21 +36,21 @@ func (w *Writer) flush(data []byte) (err error) {
 	defer func() {
 		if err == nil {
 			w.blocks = append(w.blocks, id)
-			w.fs.addPrefix(id)
+			w.s.addPrefix(id)
 		}
 	}()
 
-	if w.fs.Exists(id) {
+	if w.s.Exists(id) {
 		return nil
 	}
 
-	err = os.MkdirAll(filepath.Join(w.fs.root, id[:2]), 0700)
+	err = os.MkdirAll(filepath.Join(w.s.root, id[:2]), 0700)
 	if err != nil {
 		return err
 	}
 
 	file, err := os.OpenFile(
-		filepath.Join(w.fs.root, id[:2], id),
+		filepath.Join(w.s.root, id[:2], id),
 		os.O_WRONLY|os.O_CREATE,
 		0600,
 	)

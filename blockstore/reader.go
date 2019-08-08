@@ -1,4 +1,4 @@
-package blockfs
+package blockstore
 
 import (
 	"io"

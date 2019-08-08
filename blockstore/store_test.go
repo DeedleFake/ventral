@@ -1,4 +1,4 @@
-package blockfs_test
+package blockstore_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/DeedleFake/ventral/blockfs"
+	"github.com/DeedleFake/ventral/blockstore"
 )
 
 const testFile = `This is a test.
@@ -15,15 +15,15 @@ This is also a test, oddly enough.
 This is a test, too.
 `
 
-func TestFS(t *testing.T) {
-	fs, err := blockfs.Open("testdata")
+func TestStore(t *testing.T) {
+	s, err := blockstore.Open("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var blocks []string
 	t.Run("Write", func(t *testing.T) {
-		w := fs.Write(blockfs.NewRabinChunker((1<<5)-1, 101))
+		w := s.Write(blockstore.NewRabinChunker((1<<5)-1, 101))
 		defer func() {
 			err := w.Close()
 			if err != nil {
@@ -43,7 +43,7 @@ func TestFS(t *testing.T) {
 	})
 
 	t.Run("Read", func(t *testing.T) {
-		r, err := fs.Read(blocks)
+		r, err := s.Read(blocks)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestFS(t *testing.T) {
 }
 
 func TestChunker(t *testing.T) {
-	c := blockfs.NewRabinChunker((1<<5)-1, 101)
+	c := blockstore.NewRabinChunker((1<<5)-1, 101)
 	io.WriteString(c, testFile)
 
 	lines := [][]byte{

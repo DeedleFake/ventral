@@ -1,4 +1,4 @@
-// Package blockfs provides utilities for interfacing block-based storage.
+// Package blockstore provides utilities for interfacing block-based storage.
 //
 // ventral's block storage system stores data as collections of
 // blocks. Each block is stored in a filename of its own hash, inside
@@ -11,12 +11,15 @@
 //
 // and this file would be stored on disk as
 //
-//    <FS root>
+//    <store root>
 //     |-- 11/
 //     |    |-- 11586d2eb43b73e539caa3d158c883336c0e2c904b309c0c5ffe2c9b83d562a1
 //     |-- d5/
 //          |-- d56689f1e89a5029edf549153a4df0419343e0025a92a91a086d2225e26a8938
-package blockfs
+//
+// Reading this file would consist of essentially concatenating the
+// contents of these two blocks.
+package blockstore
 
 import (
 	"errors"
@@ -35,15 +38,15 @@ var (
 	ErrNoSuchBlock = errors.New("block does not exist in filesystem")
 )
 
-// FS provides an interface for dealing with a BlockFS system. It is
-// not safe for concurrent use.
-type FS struct {
+// Store provides an interface for dealing with a block storage
+// system. It is not safe for concurrent use.
+type Store struct {
 	root     string
 	prefixes map[string]struct{}
 }
 
 // Open opens the filesystem rooted at the specified path.
-func Open(root string) (*FS, error) {
+func Open(root string) (*Store, error) {
 	err := os.MkdirAll(root, 0700)
 	if err != nil {
 		return nil, err
@@ -55,7 +58,7 @@ func Open(root string) (*FS, error) {
 	}
 	defer dir.Close()
 
-	fs := &FS{
+	s := &Store{
 		root:     root,
 		prefixes: make(map[string]struct{}),
 	}
@@ -81,30 +84,30 @@ func Open(root string) (*FS, error) {
 				return nil, fmt.Errorf("prefix directory %q is a file", info.Name())
 			}
 
-			fs.addPrefix(info.Name())
+			s.addPrefix(info.Name())
 		}
 	}
 
-	return fs, nil
+	return s, nil
 }
 
-func (fs *FS) addPrefix(id string) {
-	fs.prefixes[id[:2]] = struct{}{}
+func (s *Store) addPrefix(id string) {
+	s.prefixes[id[:2]] = struct{}{}
 }
 
-func (fs *FS) hasPrefix(id string) bool {
-	_, ok := fs.prefixes[id[:2]]
+func (s *Store) hasPrefix(id string) bool {
+	_, ok := s.prefixes[id[:2]]
 	return ok
 }
 
 // Exists returns true if a block exists. It does not check if the
 // block is valid or not.
-func (fs *FS) Exists(block string) bool {
-	if !fs.hasPrefix(block) {
+func (s *Store) Exists(block string) bool {
+	if !s.hasPrefix(block) {
 		return false
 	}
 
-	_, err := os.Lstat(filepath.Join(fs.root, block[:2], block))
+	_, err := os.Lstat(filepath.Join(s.root, block[:2], block))
 	return !os.IsNotExist(err)
 }
 
@@ -112,9 +115,9 @@ func (fs *FS) Exists(block string) bool {
 // order. It only keeps a single block file open at a time. Closing
 // the returned io.ReadCloser closes the currently open file and
 // causes further reads to return errors.
-func (fs *FS) Read(blocks []string) (*Reader, error) {
+func (s *Store) Read(blocks []string) (*Reader, error) {
 	for _, block := range blocks {
-		if !fs.Exists(block) {
+		if !s.Exists(block) {
 			return nil, ErrNoSuchBlock
 		}
 	}
@@ -124,19 +127,19 @@ func (fs *FS) Read(blocks []string) (*Reader, error) {
 	}
 
 	return &Reader{
-		root:   fs.root,
+		root:   s.root,
 		blocks: blocks,
 	}, nil
 }
 
-// Write returns an Writer that writes a file into the FS,
+// Write returns an Writer that writes a file into the store,
 // automatically deduplicating data into the appropriate blocks using
 // the specified Chunker. It must be closed when all data has been
 // written to it to make sure that partial blocks can be written
 // properly.
-func (fs *FS) Write(chunker Chunker) *Writer {
+func (s *Store) Write(chunker Chunker) *Writer {
 	return &Writer{
-		fs:      fs,
+		s:       s,
 		chunker: chunker,
 	}
 }
