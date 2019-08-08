@@ -60,7 +60,10 @@ func (w *Writer) Write(data []byte) (n int, err error) {
 		return 0, w.err
 	}
 
-	w.chunker.Write(data)
+	n, err = w.chunker.Write(data)
+	if err != nil {
+		return n, err
+	}
 
 	for {
 		chunk := w.chunker.Next(false)
