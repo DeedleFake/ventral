@@ -6,6 +6,8 @@ import (
 
 // A Chunker splits a stream of data into chunks.
 type Chunker interface {
+	// Write adds more data to the internal buffer for chunking. It
+	// never returns an error.
 	io.Writer
 
 	// Next returns the next chunk. If end is false, it will return a
