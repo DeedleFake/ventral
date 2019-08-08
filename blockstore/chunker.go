@@ -24,6 +24,7 @@ type Chunker interface {
 type rabinChunker struct {
 	mask  uint64
 	prime uint64
+	mult  uint64
 
 	buf []byte
 	loc int
@@ -33,9 +34,15 @@ type rabinChunker struct {
 // a Rabin fingerprint mask. For example, to produce chunks that are
 // approximately 8KB, use a mask of (1 << 13) - 1.
 func NewRabinChunker(mask uint64, prime uint64) Chunker {
+	mult := uint64(1)
+	for i := 0; i < 64; i++ {
+		mult = (mult * 256) % prime
+	}
+
 	return &rabinChunker{
 		mask:  uint64(mask),
 		prime: prime,
+		mult:  mult,
 	}
 }
 
@@ -55,20 +62,19 @@ func (c *rabinChunker) Next(end bool) []byte {
 		c.buf = c.buf[:n]
 	}
 
-	for c.loc = 1; c.loc < len(c.buf); c.loc++ {
-		i := c.loc - 64
-		if i < 0 {
-			i = 0
-		}
-
-		var sum uint64
-		for ; i < c.loc; i++ {
-			sum = (sum*256)%c.prime + uint64(c.buf[c.loc])
-		}
-
+	var sum uint64
+	mult := uint64(1)
+	for c.loc = 0; (c.loc < len(c.buf)) && (c.loc < 64); c.loc++ {
+		sum = (sum*256)%c.prime + uint64(c.buf[c.loc])
+		mult = (sum * 256) % c.prime
+	}
+	for ; c.loc < len(c.buf); c.loc++ {
 		if sum&c.mask == 0 {
 			return c.buf[:c.loc]
 		}
+
+		sum -= mult * uint64(c.buf[c.loc-63])
+		sum = (sum*256)%c.prime + uint64(c.buf[c.loc])
 	}
 
 	if end {
