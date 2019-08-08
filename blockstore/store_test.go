@@ -19,7 +19,7 @@ func TestStore(t *testing.T) {
 
 	var blocks []string
 	t.Run("Write", func(t *testing.T) {
-		w := blockstore.Write(fs, blockstore.NewRabinChunker((1<<5)-1, 101))
+		w := blockstore.Write(fs, blockstore.NewRabinChunker((1<<4)-1, 101))
 		defer func() {
 			err := w.Close()
 			if err != nil {
@@ -59,12 +59,12 @@ func TestStore(t *testing.T) {
 }
 
 func TestChunker(t *testing.T) {
-	c := blockstore.NewRabinChunker((1<<5)-1, 101)
+	c := blockstore.NewRabinChunker((1<<4)-1, 101)
 	io.WriteString(c, testFile)
 
 	lines := [][]byte{
-		[]byte("This is a test.\nThis "),
-		[]byte("is also a test, oddly enough.\nThis is a tes"),
+		[]byte("This is a test.\nTh"),
+		[]byte("is is also a test, oddly enough.\nThis is a test, too."),
 	}
 
 	for i := 0; i < 10; i++ {
@@ -87,7 +87,7 @@ func TestChunker(t *testing.T) {
 	}
 
 	lines = [][]byte{
-		[]byte("t, too.\n"),
+		[]byte("\n"),
 	}
 
 	for i := 0; i < 10; i++ {
