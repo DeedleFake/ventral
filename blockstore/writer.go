@@ -3,30 +3,27 @@ package blockstore
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"io"
-	"os"
 	"path/filepath"
 )
 
 // Writer writes to a store, automatically deduplicating blocks.
 type Writer struct {
-	// Wrap inserts an io.Writer into the pipeline in between the
-	// chunker and the OS's filesystem. This can be used for, for
-	// example, compressing blocks when they are written to the
-	// filesystem. Block IDs are calculated before the data in them is
-	// written, so if the wrapping io.Writer changes the data at all
-	// then the hash of the written block data may not match the block's
-	// ID.
-	//
-	// If the returned writer implements io.Closer, it will be closed
-	// before the underlying file is closed.
-	Wrap func(io.Writer) io.Writer
-
-	s *Store
-
+	fs      FileSystem
 	chunker Chunker
 	blocks  []string
 	err     error
+}
+
+// Write returns a Writer that writes a file into the store,
+// automatically deduplicating data into the appropriate blocks using
+// the specified Chunker. It must be closed when all data has been
+// written to it to make sure that partial blocks can be written
+// properly.
+func Write(fs FileSystem, chunker Chunker) *Writer {
+	return &Writer{
+		fs:      fs,
+		chunker: chunker,
+	}
 }
 
 func (w *Writer) flush(data []byte) (err error) {
@@ -36,24 +33,14 @@ func (w *Writer) flush(data []byte) (err error) {
 	defer func() {
 		if err == nil {
 			w.blocks = append(w.blocks, id)
-			w.s.addPrefix(id)
 		}
 	}()
 
-	if w.s.Exists(id) {
+	if w.fs.Exists(id) {
 		return nil
 	}
 
-	err = os.MkdirAll(filepath.Join(w.s.root, id[:2]), 0700)
-	if err != nil {
-		return err
-	}
-
-	file, err := os.OpenFile(
-		filepath.Join(w.s.root, id[:2], id),
-		os.O_WRONLY|os.O_CREATE,
-		0600,
-	)
+	file, err := w.fs.Create(filepath.Join(id[:2], id))
 	if err != nil {
 		return err
 	}
@@ -64,20 +51,7 @@ func (w *Writer) flush(data []byte) (err error) {
 		}
 	}()
 
-	wrap := io.Writer(file)
-	if w.Wrap != nil {
-		wrap = w.Wrap(wrap)
-		if c, ok := wrap.(io.Closer); ok {
-			defer func() {
-				e := c.Close()
-				if (e != nil) && (err == nil) {
-					err = e
-				}
-			}()
-		}
-	}
-
-	_, err = wrap.Write(data)
+	_, err = file.Write(data)
 	return err
 }
 

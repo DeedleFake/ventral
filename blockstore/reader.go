@@ -1,21 +1,43 @@
 package blockstore
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 )
 
-type Reader struct {
-	// Wrap inserts an io.Reader into the pipeline in between the OS's
-	// filesystem and the client. This is useful for, for example,
-	// decompressing blocks that were compressed.
-	Wrap func(io.Reader) (io.Reader, error)
+var (
+	// ErrNoSuchBlock is returned when a block is expected to exist and
+	// doesn't.
+	ErrNoSuchBlock = errors.New("block does not exist")
+)
 
-	root    string
-	blocks  []string
-	curFile *os.File
-	cur     io.Reader
+type Reader struct {
+	fs     FileSystem
+	blocks []string
+	cur    io.ReadCloser
+}
+
+// Read returns a Reader that reads from the given blocks in order. It
+// only keeps a single block file open at a time. Closing the returned
+// io.ReadCloser closes the currently open file and causes further
+// reads to return errors.
+func Read(fs FileSystem, blocks []string) (*Reader, error) {
+	for _, block := range blocks {
+		if (len(block) < 2) || !fs.Exists(filepath.Join(block[:2], block)) {
+			return nil, ErrNoSuchBlock
+		}
+	}
+
+	if blocks == nil {
+		blocks = []string{}
+	}
+
+	return &Reader{
+		fs:     fs,
+		blocks: blocks,
+	}, nil
 }
 
 // TODO: Verify the blocks that are being read.
@@ -28,32 +50,22 @@ func (r *Reader) Read(buf []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	if r.curFile == nil {
-		cur, err := os.Open(filepath.Join(r.root, r.blocks[0][:2], r.blocks[0]))
+	if r.cur == nil {
+		cur, err := r.fs.Open(filepath.Join(r.blocks[0][:2], r.blocks[0]))
 		if err != nil {
 			return 0, err
 		}
 
-		r.curFile = cur
-		r.cur = r.curFile
-		if r.Wrap != nil {
-			r.cur, err = r.Wrap(r.cur)
-			if err != nil {
-				r.curFile = nil
-				r.cur = nil
-				return 0, err
-			}
-		}
+		r.cur = cur
 		r.blocks = r.blocks[1:]
 	}
 
 	n, err = r.cur.Read(buf)
 	if err == io.EOF {
-		err := r.curFile.Close()
+		err := r.cur.Close()
 		if err != nil {
 			return n, err
 		}
-		r.curFile = nil
 		r.cur = nil
 
 		if n == len(buf) {
@@ -69,12 +81,11 @@ func (r *Reader) Read(buf []byte) (n int, err error) {
 }
 
 func (r *Reader) Close() error {
-	if r.curFile != nil {
-		err := r.curFile.Close()
+	if r.cur != nil {
+		err := r.cur.Close()
 		if err != nil {
 			return err
 		}
-		r.curFile = nil
 		r.cur = nil
 	}
 

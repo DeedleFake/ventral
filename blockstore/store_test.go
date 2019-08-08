@@ -2,7 +2,6 @@ package blockstore_test
 
 import (
 	"bytes"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -16,14 +15,11 @@ This is a test, too.
 `
 
 func TestStore(t *testing.T) {
-	s, err := blockstore.Open("testdata")
-	if err != nil {
-		t.Fatal(err)
-	}
+	fs := blockstore.Gzip(blockstore.Dir("testdata"))
 
 	var blocks []string
 	t.Run("Write", func(t *testing.T) {
-		w := s.Write(blockstore.NewRabinChunker((1<<5)-1, 101))
+		w := blockstore.Write(fs, blockstore.NewRabinChunker((1<<5)-1, 101))
 		defer func() {
 			err := w.Close()
 			if err != nil {
@@ -32,9 +28,6 @@ func TestStore(t *testing.T) {
 
 			blocks = w.Blocks()
 		}()
-		w.Wrap = func(w io.Writer) io.Writer {
-			return gzip.NewWriter(w)
-		}
 
 		_, err := io.WriteString(w, testFile)
 		if err != nil {
@@ -43,7 +36,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Read", func(t *testing.T) {
-		r, err := s.Read(blocks)
+		r, err := blockstore.Read(fs, blocks)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,9 +46,6 @@ func TestStore(t *testing.T) {
 				t.Fatal(err)
 			}
 		}()
-		r.Wrap = func(r io.Reader) (io.Reader, error) {
-			return gzip.NewReader(r)
-		}
 
 		data, err := ioutil.ReadAll(r)
 		if err != nil {
