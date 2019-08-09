@@ -43,7 +43,12 @@ type dir string
 // the appropriate directory and renamed to the hash ID.
 func Dir(root string) (Store, error) {
 	for i := int64(0); i < 256; i++ {
-		err := os.MkdirAll(filepath.Join(root, strconv.FormatInt(i, 16)), 0700)
+		var pad string
+		if i < 16 {
+			pad = "0"
+		}
+
+		err := os.MkdirAll(filepath.Join(root, pad+strconv.FormatInt(i, 16)), 0700)
 		if err != nil {
 			return nil, err
 		}
