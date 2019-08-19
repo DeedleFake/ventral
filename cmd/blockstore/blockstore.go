@@ -54,7 +54,15 @@ func write(s blockstore.Store, args []string) {
 		fmt.Fprintf(os.Stderr, "Error: failed to create writer: %v\n", err)
 		os.Exit(1)
 	}
-	defer w.Close()
+	defer func() {
+		err := w.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to close writer: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println(*id)
+	}()
 
 	files := concat(args)
 
@@ -63,8 +71,6 @@ func write(s blockstore.Store, args []string) {
 		fmt.Fprintf(os.Stderr, "Error: failed to write data: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Printf("%x\n", id)
 }
 
 func chunk(s blockstore.Store, args []string) {
@@ -73,7 +79,7 @@ func chunk(s blockstore.Store, args []string) {
 	files := concat(args)
 	c := chunker.New(files, pol)
 
-	var ids [][]byte
+	var ids []string
 	var buf []byte
 	for {
 		n, err := c.Next(buf[:0])
@@ -92,7 +98,15 @@ func chunk(s blockstore.Store, args []string) {
 				fmt.Fprintf(os.Stderr, "Error: failed to create writer: %v\n", err)
 				os.Exit(1)
 			}
-			defer w.Close()
+			defer func() {
+				err := w.Close()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: failed to close writer: %v\n", err)
+					os.Exit(1)
+				}
+
+				ids = append(ids, *id)
+			}()
 
 			_, err = w.Write(n.Data)
 			if err != nil {
@@ -100,13 +114,12 @@ func chunk(s blockstore.Store, args []string) {
 				os.Exit(1)
 			}
 
-			ids = append(ids, id)
 			buf = n.Data
 		}()
 	}
 
 	for _, id := range ids {
-		fmt.Printf("%x\n", id)
+		fmt.Println(id)
 	}
 }
 
