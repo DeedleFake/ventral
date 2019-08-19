@@ -20,11 +20,11 @@ import (
 type Store interface {
 	// Write stores a block into the blockstore. Writing to the returned
 	// writer writes the data into a temporary location, and closing it
-	// commits it to the store. The returned byte slice will be
-	// populated with the block ID after each write as raw bytes. For
-	// actual use, the client will likely want to encode this ID to a
-	// hex string.
-	Write() (w io.WriteCloser, id []byte, err error)
+	// commits it to the store. The returned *string becomes valid when
+	// the returned writer has been written to and closed without any
+	// errors. Attempting to set the returned *string will result in
+	// undefined behavior and should be avoided.
+	Write() (w io.WriteCloser, id *string, err error)
 
 	// Read returns a reader which reads a block from the store.
 	Read(str string) (r io.ReadCloser, err error)
@@ -66,8 +66,8 @@ func (d dir) path(parts ...string) string {
 	return filepath.Join(string(d), filepath.Join(parts...))
 }
 
-func (d dir) Write() (io.WriteCloser, []byte, error) {
-	id := make([]byte, sha1.Size)
+func (d dir) Write() (io.WriteCloser, *string, error) {
+	id := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, id)
 	if err != nil {
 		return nil, nil, err
@@ -80,16 +80,17 @@ func (d dir) Write() (io.WriteCloser, []byte, error) {
 	}
 
 	h := sha1.New()
-	h.Sum(id[:0])
+	id = h.Sum(id[:0])
 
-	return &dirWriter{
+	w := &dirWriter{
 		d:    d,
 		name: name,
 		w:    io.MultiWriter(file, h),
 		c:    file,
 		h:    h,
-		id:   id,
-	}, id, nil
+		sum:  id,
+	}
+	return w, &w.id, nil
 }
 
 func (d dir) Read(id string) (io.ReadCloser, error) {
@@ -107,7 +108,8 @@ type dirWriter struct {
 	c    io.Closer
 	err  error
 	h    hash.Hash
-	id   []byte
+	sum  []byte
+	id   string
 }
 
 func (w *dirWriter) Write(data []byte) (n int, err error) {
@@ -121,7 +123,7 @@ func (w *dirWriter) Write(data []byte) (n int, err error) {
 		return n, err
 	}
 
-	w.h.Sum(w.id[:0])
+	w.sum = w.h.Sum(w.sum[:0])
 	return n, nil
 }
 
@@ -140,6 +142,6 @@ func (w *dirWriter) Close() error {
 		return w.err
 	}
 
-	id := hex.EncodeToString(w.id)
-	return os.Rename(w.d.path("write", w.name), w.d.path(id[:2], id))
+	w.id = hex.EncodeToString(w.sum)
+	return os.Rename(w.d.path("write", w.name), w.d.path(w.id[:2], w.id))
 }
