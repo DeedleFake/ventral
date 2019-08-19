@@ -9,14 +9,22 @@ import (
 	"github.com/DeedleFake/ventral/blockstore"
 )
 
-func write(store blockstore.Store, r io.Reader) (id []byte, err error) {
-	w, id, err := store.Write()
+func write(store blockstore.Store, r io.Reader) (id string, err error) {
+	w, wid, err := store.Write()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	defer func() {
+		e := w.Close()
+		if (e != nil) && (err == nil) {
+			err = e
+		}
+
+		id = *wid
+	}()
 
 	_, err = io.Copy(w, r)
-	return id, err
+	return "", err
 }
 
 func read(store blockstore.Store, id string, w io.Writer) (err error) {
@@ -42,7 +50,7 @@ func Handler(store blockstore.Store) http.Handler {
 				fmt.Fprintf(rw, "Error: %v", err)
 				break
 			}
-			fmt.Fprintf(rw, "%x", id)
+			fmt.Fprintf(rw, "%s", id)
 
 		case "read":
 			err := read(store, req.URL.Query().Get("id"), rw)

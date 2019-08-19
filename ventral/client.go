@@ -2,10 +2,10 @@ package ventral
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 )
 
 // Read sends a read request to a ventral server for the block with
@@ -47,18 +47,20 @@ func Read(c *http.Client, apiURL string, id string) (r io.ReadCloser, err error)
 // root path of the API being contacted. In other words, if the API is
 // hosted under http://www.example.com/ventral/api, then that is the
 // URL which should be provided to this function.
-func Write(c *http.Client, apiURL string, r io.Reader) (id []byte, err error) {
+func Write(c *http.Client, apiURL string, r io.Reader) (id string, err error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	u.Path = path.Join(u.Path, "write")
 
 	rsp, err := c.Post(u.String(), "application/octet-stream", r)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer rsp.Body.Close()
 
-	return ioutil.ReadAll(rsp.Body)
+	var sb strings.Builder
+	_, err = io.Copy(&sb, rsp.Body)
+	return sb.String(), err
 }
